@@ -9,18 +9,21 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// 📷 photo-organizer — 按拍照日期自动分类照片
+///
+/// 最简用法：在照片目录下直接运行 `photo-organizer`
 #[derive(Parser, Debug)]
-#[command(name = "photo-organizer", version, about)]
+#[command(name = "photo-organizer", version, about, long_about = None)]
 struct Cli {
-    /// 照片源目录路径
+    /// 照片源目录路径（默认: 当前目录）
+    #[arg(default_value = ".")]
     source: PathBuf,
 
     /// 输出目录（默认: 源目录下的 "organized"）
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// 日期目录格式（默认: "%Y/%Y-%m/%Y-%m-%d"）
-    #[arg(short, long, default_value = "%Y/%Y-%m/%Y-%m-%d")]
+    /// 日期目录格式（默认: "%Y-%m-%d"）
+    #[arg(short, long, default_value = "%Y-%m-%d")]
     format: String,
 
     /// 移动文件而非复制
@@ -31,13 +34,13 @@ struct Cli {
     #[arg(short, long)]
     dry_run: bool,
 
-    /// 递归扫描子目录
-    #[arg(short, long)]
-    recursive: bool,
+    /// 不递归扫描子目录（默认递归扫描）
+    #[arg(long)]
+    no_recursive: bool,
 
-    /// 详细输出
+    /// 静默模式，仅输出统计结果
     #[arg(short, long)]
-    verbose: bool,
+    quiet: bool,
 }
 
 /// 支持的图片文件扩展名
@@ -59,36 +62,43 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // 验证源目录存在
-    if !cli.source.exists() {
-        anyhow::bail!("源目录不存在: {}", cli.source.display());
+    let source = cli.source.canonicalize().unwrap_or_else(|_| cli.source.clone());
+    if !source.exists() {
+        anyhow::bail!("源目录不存在: {}", source.display());
     }
-    if !cli.source.is_dir() {
-        anyhow::bail!("源路径不是目录: {}", cli.source.display());
+    if !source.is_dir() {
+        anyhow::bail!("源路径不是目录: {}", source.display());
     }
 
     // 确定输出目录
     let output_dir = cli
         .output
         .clone()
-        .unwrap_or_else(|| cli.source.join("organized"));
+        .unwrap_or_else(|| source.join("organized"));
 
-    if cli.dry_run {
-        println!("🔍 预览模式 (dry-run) — 不会实际操作文件\n");
+    let recursive = !cli.no_recursive;
+
+    if !cli.quiet {
+        if cli.dry_run {
+            println!("🔍 预览模式 — 不会实际操作文件\n");
+        }
+        println!("📂 源目录:   {}", source.display());
+        println!("📁 输出目录: {}", output_dir.display());
+        println!(
+            "📋 操作模式: {}  |  📅 日期格式: {}  |  🔄 递归: {}",
+            if cli.r#move { "移动" } else { "复制" },
+            cli.format,
+            if recursive { "是" } else { "否" }
+        );
+        println!();
     }
 
-    println!("📂 源目录: {}", cli.source.display());
-    println!("📁 输出目录: {}", output_dir.display());
-    println!(
-        "📋 操作模式: {}",
-        if cli.r#move { "移动" } else { "复制" }
-    );
-    println!("📅 日期格式: {}", cli.format);
-    println!("🔄 递归扫描: {}", if cli.recursive { "是" } else { "否" });
-    println!();
-
     // 收集所有照片文件
-    let photos = collect_photos(&cli.source, cli.recursive)?;
-    println!("📸 找到 {} 张照片\n", photos.len());
+    let photos = collect_photos(&source, recursive)?;
+
+    if !cli.quiet {
+        println!("📸 找到 {} 张照片\n", photos.len());
+    }
 
     if photos.is_empty() {
         println!("没有找到支持的照片文件。");
@@ -103,9 +113,7 @@ fn main() -> Result<()> {
             Ok(()) => {}
             Err(e) => {
                 stats.errors += 1;
-                if cli.verbose {
-                    eprintln!("⚠️  处理失败: {} — {}", photo_path.display(), e);
-                }
+                eprintln!("⚠️  处理失败: {} — {}", photo_path.display(), e);
             }
         }
     }
@@ -113,16 +121,13 @@ fn main() -> Result<()> {
     // 输出统计
     println!();
     println!("═══════════════════════════════════════");
-    println!("📊 处理完成统计:");
-    println!("   总计:     {} 张照片", photos.len());
-    println!("   ✅ 已分类: {} 张 (按日期)", stats.organized);
-    println!("   📁 未分类: {} 张 (无 EXIF 日期)", stats.unsorted);
-    println!("   ⚠️  跳过:   {} 张 (已存在)", stats.skipped);
-    println!("   ❌ 错误:   {} 张", stats.errors);
+    println!("📊 处理完成:");
+    println!("   ✅ 已分类  {} 张  📁 未分类  {} 张  ⏭ 跳过  {} 张  ❌ 错误  {} 张",
+        stats.organized, stats.unsorted, stats.skipped, stats.errors);
     println!("═══════════════════════════════════════");
 
     // 输出日期分类统计
-    if !stats.date_counts.is_empty() {
+    if !cli.quiet && !stats.date_counts.is_empty() {
         println!("\n📅 日期分布:");
         let mut dates: Vec<_> = stats.date_counts.iter().collect();
         dates.sort_by_key(|(k, _)| (*k).clone());
@@ -227,12 +232,9 @@ fn process_photo(photo_path: &Path, output_dir: &Path, cli: &Cli, stats: &mut St
 
     let target_path = resolve_conflict(&target_subdir, &file_name);
 
-    // 如果目标文件和源文件是同一个文件，跳过
+    // 目标已存在则跳过
     if target_path.exists() {
         stats.skipped += 1;
-        if cli.verbose {
-            println!("⏭  跳过 (已存在): {}", photo_path.display());
-        }
         return Ok(());
     }
 
@@ -241,7 +243,7 @@ fn process_photo(photo_path: &Path, output_dir: &Path, cli: &Cli, stats: &mut St
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
         .unwrap_or_else(|| "无日期".to_string());
 
-    if cli.verbose || cli.dry_run {
+    if !cli.quiet {
         println!(
             "  {} {} → {} [{}]",
             if cli.dry_run {
@@ -256,30 +258,20 @@ fn process_photo(photo_path: &Path, output_dir: &Path, cli: &Cli, stats: &mut St
     }
 
     if !cli.dry_run {
-        // 创建目标目录
         fs::create_dir_all(&target_subdir)
             .with_context(|| format!("无法创建目录: {}", target_subdir.display()))?;
 
         if cli.r#move {
-            // 尝试 rename，如果跨文件系统则 fallback 到复制+删除
             if fs::rename(photo_path, &target_path).is_err() {
                 fs::copy(photo_path, &target_path).with_context(|| {
-                    format!(
-                        "无法复制: {} → {}",
-                        photo_path.display(),
-                        target_path.display()
-                    )
+                    format!("无法复制: {} → {}", photo_path.display(), target_path.display())
                 })?;
                 fs::remove_file(photo_path)
                     .with_context(|| format!("无法删除源文件: {}", photo_path.display()))?;
             }
         } else {
             fs::copy(photo_path, &target_path).with_context(|| {
-                format!(
-                    "无法复制: {} → {}",
-                    photo_path.display(),
-                    target_path.display()
-                )
+                format!("无法复制: {} → {}", photo_path.display(), target_path.display())
             })?;
         }
     }
@@ -319,7 +311,6 @@ fn resolve_conflict(dir: &Path, file_name: &str) -> PathBuf {
         }
     }
 
-    // 极端情况 fallback
     dir.join(format!("{}_{}", file_name, chrono::Utc::now().timestamp()))
 }
 

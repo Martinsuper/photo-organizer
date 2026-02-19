@@ -12,7 +12,7 @@ use walkdir::WalkDir;
 ///
 /// 最简用法：在照片目录下直接运行 `photo-organizer`
 #[derive(Parser, Debug)]
-#[command(name = "photo-organizer", version, about, long_about = None)]
+#[command(name = "porg", version, about, long_about = None)]
 struct Cli {
     /// 照片源目录路径（默认: 当前目录）
     #[arg(default_value = ".")]

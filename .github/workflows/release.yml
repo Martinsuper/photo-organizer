@@ -62,29 +62,29 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      # 打包 (Unix) — 文件名带版本号: photo-organizer_v1.0.0_darwin_arm64.tar.gz
+      # 打包 (Unix) — 文件名带版本号: porg_v1.0.0_darwin_arm64.tar.gz
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
-          ARCHIVE_NAME="photo-organizer_${{ github.ref_name }}_${{ matrix.platform }}"
+          ARCHIVE_NAME="porg_${{ github.ref_name }}_${{ matrix.platform }}"
           cd target/${{ matrix.target }}/release
-          tar czf "../../../${ARCHIVE_NAME}.tar.gz" photo-organizer
+          tar czf "../../../${ARCHIVE_NAME}.tar.gz" porg
           cd ../../..
           echo "ARCHIVE_NAME=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
 
-      # 打包 (Windows) — 文件名带版本号: photo-organizer_v1.0.0_windows_amd64.zip
+      # 打包 (Windows) — 文件名带版本号: porg_v1.0.0_windows_amd64.zip
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $ArchiveName = "photo-organizer_${{ github.ref_name }}_${{ matrix.platform }}"
-          Compress-Archive -Path "target/${{ matrix.target }}/release/photo-organizer.exe" -DestinationPath "${ArchiveName}.zip"
+          $ArchiveName = "porg_${{ github.ref_name }}_${{ matrix.platform }}"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/porg.exe" -DestinationPath "${ArchiveName}.zip"
           echo "ARCHIVE_NAME=${ArchiveName}.zip" >> $env:GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: photo-organizer_${{ github.ref_name }}_${{ matrix.platform }}
+          name: porg_${{ github.ref_name }}_${{ matrix.platform }}
           path: |
             *.tar.gz
             *.zip

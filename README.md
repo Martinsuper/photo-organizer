@@ -1,6 +1,6 @@
-# 📷 photo-organizer
+# 📷 porg
 
-一个用 Rust 编写的命令行工具，读取照片 EXIF 元信息，按拍照日期自动分类整理照片。
+**p**hoto **org**anizer — 一个用 Rust 编写的命令行工具，读取照片 EXIF 元信息，按拍照日期自动分类。
 
 ## ✨ 功能特性
 
@@ -24,28 +24,28 @@ cargo install --path .
 
 ```bash
 # 最简用法：在照片目录下直接运行
-cd ~/Photos && photo-organizer
+cd ~/Photos && porg
 
 # 指定源目录
-photo-organizer ~/Photos
+porg ~/Photos
 
 # 预览（不实际操作）
-photo-organizer --dry-run ~/Photos
+porg --dry-run ~/Photos
 
 # 指定输出目录
-photo-organizer -o ~/SortedPhotos ~/Photos
+porg -o ~/SortedPhotos ~/Photos
 
 # 移动而非复制
-photo-organizer --move ~/Photos
+porg --move ~/Photos
 
 # 自定义日期目录格式
-photo-organizer -f "%Y/%Y-%m/%Y-%m-%d" ~/Photos
+porg -f "%Y/%Y-%m/%Y-%m-%d" ~/Photos
 ```
 
 ### 全部参数
 
 ```
-photo-organizer [OPTIONS] [SOURCE]
+porg [OPTIONS] [SOURCE]
 
 Arguments:
   [SOURCE]             照片源目录（默认: 当前目录）

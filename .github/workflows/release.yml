@@ -18,19 +18,19 @@ jobs:
         include:
           - os: macos-latest
             target: x86_64-apple-darwin
-            name: photo-organizer-x86_64-apple-darwin
+            platform: darwin_amd64
           - os: macos-latest
             target: aarch64-apple-darwin
-            name: photo-organizer-aarch64-apple-darwin
+            platform: darwin_arm64
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            name: photo-organizer-x86_64-unknown-linux-gnu
+            target: x86_64-linux-gnu
+            platform: linux_amd64
           - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            name: photo-organizer-aarch64-unknown-linux-gnu
+            target: aarch64-linux-gnu
+            platform: linux_arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            name: photo-organizer-x86_64-pc-windows-msvc
+            platform: windows_amd64
 
     runs-on: ${{ matrix.os }}
 
@@ -62,28 +62,32 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      # 打包 (Unix)
+      # 打包 (Unix) — 文件名带版本号: photo-organizer_v1.0.0_darwin_arm64.tar.gz
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
+          ARCHIVE_NAME="photo-organizer_${{ github.ref_name }}_${{ matrix.platform }}"
           cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.name }}.tar.gz photo-organizer
+          tar czf "../../../${ARCHIVE_NAME}.tar.gz" photo-organizer
           cd ../../..
+          echo "ARCHIVE_NAME=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
 
-      # 打包 (Windows)
+      # 打包 (Windows) — 文件名带版本号: photo-organizer_v1.0.0_windows_amd64.zip
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path "target/${{ matrix.target }}/release/photo-organizer.exe" -DestinationPath "${{ matrix.name }}.zip"
+          $ArchiveName = "photo-organizer_${{ github.ref_name }}_${{ matrix.platform }}"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/photo-organizer.exe" -DestinationPath "${ArchiveName}.zip"
+          echo "ARCHIVE_NAME=${ArchiveName}.zip" >> $env:GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}
+          name: photo-organizer_${{ github.ref_name }}_${{ matrix.platform }}
           path: |
-            ${{ matrix.name }}.tar.gz
-            ${{ matrix.name }}.zip
+            *.tar.gz
+            *.zip
 
   # 创建 GitHub Release 并上传所有平台的二进制文件
   release:
